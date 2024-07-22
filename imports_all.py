@@ -18,7 +18,7 @@ import scipy.special as specialfn
 import pandas as pd
 import sklearn
 import tensorflow as tf
-import tensorflow.keras as keras
+import keras as keras
 from tensorflow.python.framework import ops as tfops
 from tensorflow.python.framework import tensor_shape
 
@@ -26,7 +26,7 @@ from tensorflow.python.framework import tensor_shape
 # ===============
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import seaborn as sns
+#import seaborn as sns
 
 # System, i/o
 # ===============

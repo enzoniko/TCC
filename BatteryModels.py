@@ -14,66 +14,142 @@ from abc import abstractmethod
 from imports_all import keras, tf, tensor_shape, tfops, np
 import BatteryParameters as b_params
 
+# IMPORTS ADDED BY ME
+from keras import Sequential
+from keras.layers import Dense 
+from tensorflow.python.ops import math_ops
+from tensorflow.python.framework import ops
 
-
+tf.config.run_functions_eagerly(True)
 
 class RedlichKisterExpansion():
     
+    """
+    This class apparently calculates a property related to a battery using the Redlich-Kister equation 
+    for a specific electrode (positive or negative) based on the mole fraction of a component.
+
+    ...
+    """
     def __init__(self, U0p=None, U0n=None, Aps=None, Ans=None, F=None, **kwargs):
-        self.parameters = self.initialize(self, U0p, U0n, Aps, Ans)
+
+        """
+        Initializes the RedlichKisterExpansion object.
+
+        Args:
+            U0p (float, optional): Optional reference potential for the positive electrode.
+            U0n (float, optional): Optional reference potential for the negative electrode.
+            Aps (list, optional): Optional coefficients for the Redlich-Kister equation for the positive electrode.
+            Ans (list, optional): Optional coefficients for the Redlich-Kister equation for the negative electrode.
+            F (float): Faraday's constant (physical constant).
+            **kwargs: Additional keyword arguments (not used here explicitly).
+        """
+        self.parameters = {'positive': {'U0': None, 'As': None}, 'negative': {'U0': None, 'As': None}}
+
+        self.parameters = self.initialize(U0p, U0n, Aps, Ans)
+        # self.dtype = 'float64' # Temporarily commented
         self.dtype = 'float64'
         self.F = F
         super(RedlichKisterExpansion, self).__init__(**kwargs)
 
     def initialize(self, U0p, U0n, Aps, Ans):
+
+        """
+        Sets up the initial parameters for the Redlich-Kister equation calculation.
+
+        Args:
+            U0p (float, optional): Optional reference potential for the positive electrode.
+            U0n (float, optional): Optional reference potential for the negative electrode.
+            Aps (list, optional): Optional coefficients for the Redlich-Kister equation for the positive electrode.
+            Ans (list, optional): Optional coefficients for the Redlich-Kister equation for the negative electrode.
+
+        Returns:
+            dict: Dictionary containing the parameters for the Redlich-Kister equation (reference potential and coefficients) for positive and negative electrodes.
+        """
         
         params = b_params.rkexp_default()
+
+        params['positive']['As'] = [params['positive']['A0'], params['positive']['A1'], 
+                                    params['positive']['A2'], params['positive']['A3'], 
+                                    params['positive']['A4'], params['positive']['A5'], 
+                                    params['positive']['A6'], params['positive']['A7'], 
+                                    params['positive']['A8'], params['positive']['A9'], 
+                                    params['positive']['A10'], params['positive']['A11'], params['positive']['A12']]
+
         if U0p is not None: params['positive']['U0'] = U0p
-        if Aps is not None: params['positive']['As'] = Aps
+        if Aps is not None: params['positive']['As'] = Aps 
         if U0n is not None: params['negative']['U0'] = U0n
         if Ans is not None: params['negative']['As'] = Ans
 
         self.parameters['positive']['U0'] = params['positive']['U0']
-        self.parameters['positive']['As'] = params['positive']['As']
+        self.parameters['positive']['As'] = params['positive']['As'] # This could break if no Aps is passed
         self.parameters['negative']['U0'] = params['negative']['U0']
         self.parameters['negative']['As'] = params['negative']['As']
         self.N = {'positive': len(self.parameters['positive']['As']), 'negative': len(self.parameters['negative']['As'])}
         return self.parameters
 
-    def __call__(self, x, side):
+    def __call__(self, x, side): 
+        # Calcula diretamente todos os termos da expansão de Redlich-Kister
+     
+        """
+        Calculates a property related to a battery using the Redlich-Kister equation for a specific electrode.
+
+        Args:
+            x (float): Mole fraction of a component in the battery (between 0 and 1).
+            side (str): String indicating the electrode (positive or negative).
+
+        Returns:
+            float: Calculated property value using the Redlich-Kister equation for the specified electrode and mole fraction.
+        """
 
         x2          = tf.math.multiply( tf.constant(2.0, dtype=self.dtype), x)       # 2x
         x2m1        = tf.math.subtract( x2, tf.constant(1.0, dtype=self.dtype))    # 2x - 1
         A_times_xfn = np.zeros((self.N[side],))
 
         for k in range(self.N[side]):
-            x2m1_pow_kp1 = tf.math.pow(x2m1, tf.math.add(k, tf.constant(1.0, dtype=self.dtype)))    # (2x - 1)^(k+1)
+            x2m1_pow_kp1 = tf.math.pow(x2m1, tf.math.add(tf.constant(k, dtype=self.dtype), tf.constant(1.0, dtype=self.dtype)))    # (2x - 1)^(k+1)
             x2m1_pow_1mk = tf.math.pow(x2m1, tf.math.subtract(tf.constant(1.0, dtype=self.dtype), k))    # (2x - 1)^(1-k)
             x2k          = tf.math.multiply_no_nan(x2, k)   # 2xk   
-            x2k_1mx      = tf.math.multiply_no_nan(x2k, tf.math.subtract(1, x))  # 2xk(1-x)
+            x2k_1mx      = tf.math.multiply_no_nan(x2k, tf.math.subtract(1.0, x))  # 2xk(1-x)
             x2ratio      = x2k_1mx / x2m1_pow_1mk   # 2xk(1-x) / (2x - 1)^(1-k)
             x_term       = x2m1_pow_kp1 - x2ratio   # (2x - 1)^(k+1) - 2xk(1-x) / (2x - 1)^(1-k)
-            A_times_xfn[k] = tf.math.multiply_no_nan(self.parameters[side]['As'][k], x_term)    # A * ((2x - 1)^(k+1) - 2xk(1-x) / (2x - 1)^(1-k))
+            #print(f"As side={side} k={k} = {self.parameters[side]['As'][k]}")
+            #print(f"X_TERM: {x_term}")
+            #print(f"MULTIPLY: {tf.math.multiply_no_nan(self.parameters[side]['As'][k], x_term)}")
+            #print(f"Multiply: {tf.math.multiply_no_nan(self.parameters[side]['As'][k], x_term).numpy()}")
+            A_times_xfn[k] = tf.math.multiply_no_nan(self.parameters[side]['As'][k], x_term).numpy()    # A * ((2x - 1)^(k+1) - 2xk(1-x) / (2x - 1)^(1-k))
         A_times_xfn = tfops.convert_to_tensor(np.sum(A_times_xfn), dtype=self.dtype)
-
-        return tf.math.divide_no_nan(A_times_xfn, tf.constant(self.F, dtype=self.dtype))
+        #print(f'.', end='', flush=True)
+        return tf.math.divide_no_nan(A_times_xfn, tf.constant(self.F, dtype=self.dtype))   # A * ((2x - 1)^(k+1) - 2xk(1-x) / (2x - 1)^(1-k)) / F
 
 
 # pure-physics battery model
 # ============================
 
 class BatteryCellPhy(keras.layers.Layer):
+
+    """
+    This class represents a layer in a Keras neural network model for simulating a battery cell.
+
+    Args:
+        dt (float, optional): Time step for the simulation (defaults to 1.0).
+        eod_threshold (float, optional): End-of-Discharge threshold voltage (defaults to 3.0 V).
+            This might be used as a criterion for stopping the simulation when the battery is considered discharged.
+        init_params (dict, optional): Optional dictionary containing initial parameters for the battery model.
+            If provided, it overrides default parameter values.
+        **kwargs: Additional keyword arguments passed to the base class constructor.
+    """
+
     def __init__(self, dt=1.0, eod_threshold=3.0, init_params=None, **kwargs):
         super(BatteryCellPhy, self).__init__(**kwargs)
 
-        
+        self.initial_state = None
         self.dt = dt
         self.eod_th = eod_threshold
 
         # List of input, state, output
-        self.inputs  = ['i']
+        self.inputs  = ['i'] # Input: Current
         self.states  = ['tb', 'Vo', 'Vsn', 'Vsp', 'qnB', 'qnS', 'qpB', 'qpS']
-        self.outputs = ['v']
+        self.outputs = ['v'] # Output: Voltage
         
         # Hidden state vector
         self.parameters = {key: np.nan for key in ['xnMax', 'xnMin', 'xpMax', 'xpMin', 'Ro', 'qMax', 'R', 'F', 'alpha',
@@ -90,13 +166,25 @@ class BatteryCellPhy(keras.layers.Layer):
 
 
     def initialize(self,init_params=None):
+
+        """
+        Initializes the model parameters.
+
+        Args:
+            init_params (dict, optional): Optional dictionary containing initial parameters for the battery model.
+                If provided, it overrides default parameter values.
+
+        Returns:
+            dict: Dictionary containing the model parameters.
+        """
         
         # Initialize model parameters: custom (with init_params) or default
         # ===============================================================
         if init_params is not None:
             assert type(init_params)==dict, "Input 'init_params' to initial model parameters must be a dictionary."
-            # This for loos is not the most efficient way to do it, but it ensures that all required parameters are passed
+            # This for loop is not the most efficient way to do it, but it ensures that all required parameters are passed
             for key, _ in init_params.items():  self.parameters[key] = init_params[key] 
+            # Calculate maximum charge based on minimum and maximum mole fractions for negative electrode
             self.parameters['qmax'] = self.parameters['xnMax'] - self.parameters['xnMin']
         else:
             self.parameters = b_params.default()
@@ -108,49 +196,100 @@ class BatteryCellPhy(keras.layers.Layer):
             assert val != np.nan, "Parameter " + key + " has not been set. Check initial parameter dictionary"
         print(' complete.')
 
+        print(self.parameters)
+
         # Add derived parameters
         # =====================
         print('Add derived parameters ...', end=' ')
-        self.parameters['VolS']   = self.parameters['VolSFraction'] * self.parameters['Vol']  # surface volume
-        self.parameters['VolB']   = self.parameters['Vol']   - self.parameters['VolS']  # bulk volume
-        self.parameters['qpMin']  = self.parameters['qMax']  * self.parameters['xpMin'] # min charge at pos electrode
-        self.parameters['qpMax']  = self.parameters['qMax']  * self.parameters['xpMax'] # max charge at pos electrode
-        self.parameters['qpSMin'] = self.parameters['qpMin'] * self.parameters['VolS'] / self.parameters['Vol'] # min charge at surface, pos electrode
-        self.parameters['qpBMin'] = self.parameters['qpMin'] * self.parameters['VolB'] / self.parameters['Vol'] # min charge at bulk, pos electrode
-        self.parameters['qpSMax'] = self.parameters['qpMax'] * self.parameters['VolS'] / self.parameters['Vol'] # max charge at surface, pos electrode
-        self.parameters['qpBMax'] = self.parameters['qpMax'] * self.parameters['VolB'] / self.parameters['Vol'] # max charge at bulk, pos electrode
-        self.parameters['qnMin']  = self.parameters['qMax']  * self.parameters['xnMin'] # max charge at neg electrode
-        self.parameters['qnMax']  = self.parameters['qMax']  * self.parameters['xnMax'] # max charge at neg electrode
-        self.parameters['qnSMax'] = self.parameters['qnMax'] * self.parameters['VolS'] / self.parameters['Vol'] # max charge at surface, neg electrode
-        self.parameters['qnBMax'] = self.parameters['qnMax'] * self.parameters['VolB'] / self.parameters['Vol'] # max charge at bulk, neg electrode
-        self.parameters['qnSMin'] = self.parameters['qnMin'] * self.parameters['VolS'] / self.parameters['Vol'] # min charge at surface, neg electrode
-        self.parameters['qnBMin'] = self.parameters['qnMin'] * self.parameters['VolB'] / self.parameters['Vol'] # min charge at bulk, neg electrode
-        self.parameters['qSMax']  = self.parameters['qMax']  * self.parameters['VolS'] / self.parameters['Vol'] # max charge at surface (pos and neg)
-        self.parameters['qBMax']  = self.parameters['qMax']  * self.parameters['VolB'] / self.parameters['Vol'] # max charge at bulk (pos and neg)
+        self.parameters['VolS']   = self.parameters['VolumeSurf'] * self.parameters['Volume']  # surface volume
+        self.parameters['VolB']   = self.parameters['Volume']   - self.parameters['VolS']  # bulk volume
+        self.parameters['qpMin']  = self.parameters['qmax']  * self.parameters['xpMin'] # min charge at pos electrode
+        self.parameters['qpMax']  = self.parameters['qmax']  * self.parameters['xpMax'] # max charge at pos electrode
+        self.parameters['qpSMin'] = self.parameters['qpMin'] * self.parameters['VolS'] / self.parameters['Volume'] # min charge at surface, pos electrode
+        self.parameters['qpBMin'] = self.parameters['qpMin'] * self.parameters['VolB'] / self.parameters['Volume'] # min charge at bulk, pos electrode
+        self.parameters['qpSMax'] = self.parameters['qpMax'] * self.parameters['VolS'] / self.parameters['Volume'] # max charge at surface, pos electrode
+        self.parameters['qpBMax'] = self.parameters['qpMax'] * self.parameters['VolB'] / self.parameters['Volume'] # max charge at bulk, pos electrode
+        self.parameters['qnMin']  = self.parameters['qmax']  * self.parameters['xnMin'] # max charge at neg electrode
+        self.parameters['qnMax']  = self.parameters['qmax']  * self.parameters['xnMax'] # max charge at neg electrode
+        self.parameters['qnSMax'] = self.parameters['qnMax'] * self.parameters['VolS'] / self.parameters['Volume'] # max charge at surface, neg electrode
+        self.parameters['qnBMax'] = self.parameters['qnMax'] * self.parameters['VolB'] / self.parameters['Volume'] # max charge at bulk, neg electrode
+        self.parameters['qnSMin'] = self.parameters['qnMin'] * self.parameters['VolS'] / self.parameters['Volume'] # min charge at surface, neg electrode
+        self.parameters['qnBMin'] = self.parameters['qnMin'] * self.parameters['VolB'] / self.parameters['Volume'] # min charge at bulk, neg electrode
+        self.parameters['qSMax']  = self.parameters['qmax']  * self.parameters['VolS'] / self.parameters['Volume'] # max charge at surface (pos and neg)
+        self.parameters['qBMax']  = self.parameters['qmax']  * self.parameters['VolB'] / self.parameters['Volume'] # max charge at bulk (pos and neg)
         print(' complete.')
-
+    
         return self.parameters
 
     def Vint_safe(self, x, side):
-        x_ok   = tf.not_equal(x, 0.5)
-        safe_f = tf.zeros_like()
-        safe_x = tf.where(x_ok, x, tf.ones_like(x))
+        """
+        Calculates a voltage-related property using the Redlich-Kister Expansion with a safety check.
+
+        Args:
+            x (float): Mole fraction.
+            side (str): Electrode side (positive or negative).
+
+        Returns:
+            float: Voltage-related property or zero for invalid inputs.
+        """
+
+        x_ok   = tf.not_equal(x, 0.5)  # Check if x is not equal to 0.5 (potential singularity)
+        safe_f = tf.zeros_like       # Placeholder for zero output on invalid input
+        safe_x = tf.where(x_ok, x, tf.ones_like(x))  # Replace problematic x with ones
+
+        # Use safe_x to avoid potential issues in VintFn
         return tf.where(x_ok, self.VintFn(safe_x, side), safe_f(x))
 
     def build(self, input_shape, **kwargs):
+        """
+        Placeholder method called during model building (may be customized in future).
+
+        Args:
+            input_shape (tuple): Shape of the layer's input.
+            **kwargs: Additional keyword arguments.
+        """
+
         self.built = True
 
-    
     def call(self, inputs, states):
+        """
+        Calculates the updated state and output of the battery model for a given input current.
+
+        Args:
+            inputs (tensor): Input tensor (likely battery current).
+            states (list): List containing current state variables of the battery model.
+
+        Returns:
+            tuple: (output tensor, list of updated state variables).
+        """
+
         inputs = tfops.convert_to_tensor(inputs, dtype=self.dtype)
         states = tfops.convert_to_tensor(states, dtype=self.dtype)
-        states = states[0,:]
+        states = states[0, :]  # Extract first element from states list (assuming single sub-state)
 
-        next_states = self.getNextState(states,inputs)
-
-        output = self.getNextOutput(next_states,inputs)
+        next_states = self.getNextState(states, inputs)  # Update state variables
+        output = self.getNextOutput(next_states, inputs)  # Calculate output voltage
 
         return output, [next_states]
+
+    """ def Vi(self, A, x, i):
+
+        # epsilon = tf.constant(1e-16, dtype=self.dtype)
+        # n_epsilon = tf.math.negative(epsilon)
+        temp_x = tf.math.multiply(tf.constant(2.0, dtype=self.dtype),x)
+        temp_x = tf.math.subtract(temp_x,tf.constant(1.0, dtype=self.dtype))
+        pow_1 = tf.math.pow(temp_x, tf.math.add(i, tf.constant(1.0, dtype=self.dtype)))
+        # pow_1 = tf.clip_by_value(tf.math.pow(temp_x, tf.math.add(i, tf.constant(1.0, dtype=self.dtype))), n_epsilon, epsilon)
+        pow_2 = tf.math.pow(temp_x, tf.math.subtract(tf.constant(1.0, dtype=self.dtype), i))
+        # pow_2 = tf.clip_by_value(tf.math.pow(temp_x, tf.math.subtract(tf.constant(1.0, dtype=self.dtype), i)), n_epsilon, epsilon)
+        temp_2xk = tf.math.multiply(tf.math.multiply_no_nan(x,i), tf.constant(2.0, dtype=self.dtype))
+        temp_2xk = tf.math.multiply_no_nan(tf.math.subtract(tf.constant(1.0, dtype=self.dtype), x), temp_2xk)
+        div = tf.math.divide_no_nan(temp_2xk, pow_2)
+        denum = tf.math.multiply_no_nan(tf.math.subtract(pow_1, div), A)
+        ret = tf.math.divide_no_nan(denum, tf.constant(self.F, dtype=self.dtype))
+
+        return ret
+        # return A*((2*x-1)**(i+1) - (2*x*i*(1-x))/(2*x-1)**(1-i))/self.F """
 
     @tf.function
     def getNextOutput(self, X, U):
@@ -167,7 +306,7 @@ class BatteryCellPhy(keras.layers.Layer):
         #   No copyright is claimed in the United States under Title 17, U.S.
         #   Code. All Other Rights Reserved.
 
-        # Extract states
+        # Extract states, here it has the new states already
         Tb = X[:,0]
         Vo = X[:,1]
         Vsn = X[:,2]
@@ -180,81 +319,44 @@ class BatteryCellPhy(keras.layers.Layer):
         # Extract inputs
         P = U[:,0]
 
-        parameters = self
+        parameters = self.parameters # I think here should be self.parameters instead
 
-        Ap0 = parameters.Ap0 * parameters.BASE_Ap0
-        Ap1 = parameters.Ap1 * parameters.BASE_Ap1
-        Ap2 = parameters.Ap2 * parameters.BASE_Ap2
-        Ap3 = parameters.Ap3 * parameters.BASE_Ap3
-        Ap4 = parameters.Ap4 * parameters.BASE_Ap4
-        Ap5 = parameters.Ap5 * parameters.BASE_Ap5
-        Ap6 = parameters.Ap6 * parameters.BASE_Ap6
-        Ap7 = parameters.Ap7 * parameters.BASE_Ap7
-        Ap8 = parameters.Ap8 * parameters.BASE_Ap8
-        Ap9 = parameters.Ap9 * parameters.BASE_Ap9
-        Ap10 = parameters.Ap10 * parameters.BASE_Ap10
-        Ap11 = parameters.Ap11 * parameters.BASE_Ap11
-        Ap12 = parameters.Ap12 * parameters.BASE_Ap12
+        # Redlich-Kister expansion
+        Rk = self.VintFn # Or Vi = self.Vint_safe
 
-        An0 = parameters.An0 * parameters.BASE_An0
-
-        An1 = parameters.An1
-        An2 = parameters.An2
-        An3 = parameters.An3
-        An4 = parameters.An4
-        An5 = parameters.An5
-        An6 = parameters.An6
-        An7 = parameters.An7
-        An8 = parameters.An8
-        An9 = parameters.An9
-        An10 = parameters.An10
-        An11 = parameters.An11
-        An12 = parameters.An12
-
-        # Redlich-Kister expansion item
-        # Vi = lambda A,x,i: A*((2*x-1)**(i+1) - (2*x*i*(1-x))/(2*x-1)**(1-i))/parameters.F
-        # Vi = self.safe_Vi
-        Vi = self.Vi
-
+        # TODO: Here the xpS and xnS appear to be the xi = qi/qmax for i = p and i = n in the equilibrium potential formula (Butler-Volmer)
+        # But their variable names in the script are closer to the mole fraction ON THE SURFACE (therefore S) of the positive and negative electrodes
+        # This is the formula 5 in the paper, however in the paper i did not find a formula using it.
+        # But maybe it is correct as is in the code...Need to check this later
         # Constraints
         Tbm = Tb-273.15
-        xpS = qpS/parameters.qSMax
+        xpS = qpS/parameters["qSMax"] # This is the mole fraction of the positive electrode surface, it is the xi = qi/qmax for i = p in the equilibrium potential formula (Butler-Volmer)
 
-        Vep0 = Vi(Ap0,xpS,tf.constant(0.0, dtype=self.dtype))
-        Vep1 = Vi(Ap1,xpS,tf.constant(1.0, dtype=self.dtype))
-        Vep2 = Vi(Ap2,xpS,tf.constant(2.0, dtype=self.dtype))
-        Vep3 = Vi(Ap3,xpS,tf.constant(3.0, dtype=self.dtype))
-        Vep4 = Vi(Ap4,xpS,tf.constant(4.0, dtype=self.dtype))
-        Vep5 = Vi(Ap5,xpS,tf.constant(5.0, dtype=self.dtype))
-        Vep6 = Vi(Ap6,xpS,tf.constant(6.0, dtype=self.dtype))
-        Vep7 = Vi(Ap7,xpS,tf.constant(7.0, dtype=self.dtype))
-        Vep8 = Vi(Ap8,xpS,tf.constant(8.0, dtype=self.dtype))
-        Vep9 = Vi(Ap9,xpS,tf.constant(9.0, dtype=self.dtype))
-        Vep10 = Vi(Ap10,xpS,tf.constant(10.0, dtype=self.dtype))
-        Vep11 = Vi(Ap11,xpS,tf.constant(11.0, dtype=self.dtype))
-        Vep12 = Vi(Ap12,xpS,tf.constant(12.0, dtype=self.dtype))
+        Rkp = Rk(xpS, 'positive') # This is the sum of the Redlich-Kister expansion terms for the positive electrode
+        # Apparently it approximates the non-ideal internal voltage for this pure physics model
+        
+        print(f'Rkp: {Rkp}')
 
-        xnS = qnS/parameters.qSMax
+        xnS = qnS/parameters["qSMax"] # This is the mole fraction of the negative electrode surface, it is the xi = qi/qmax for i = n in the equilibrium potential formula (Butler-Volmer)
 
-        Ven0 = Vi(An0,xnS,tf.constant(0.0, dtype=self.dtype))
-        Ven1 = Vi(An1,xnS,tf.constant(1.0, dtype=self.dtype))
-        Ven2 = Vi(An2,xnS,tf.constant(2.0, dtype=self.dtype))
-        Ven3 = Vi(An3,xnS,tf.constant(3.0, dtype=self.dtype))
-        Ven4 = Vi(An4,xnS,tf.constant(4.0, dtype=self.dtype))
-        Ven5 = Vi(An5,xnS,tf.constant(5.0, dtype=self.dtype))
-        Ven6 = Vi(An6,xnS,tf.constant(6.0, dtype=self.dtype))
-        Ven7 = Vi(An7,xnS,tf.constant(7.0, dtype=self.dtype))
-        Ven8 = Vi(An8,xnS,tf.constant(8.0, dtype=self.dtype))
-        Ven9 = Vi(An9,xnS,tf.constant(9.0, dtype=self.dtype))
-        Ven10 = Vi(An10,xnS,tf.constant(10.0, dtype=self.dtype))
-        Ven11 = Vi(An11,xnS,tf.constant(11.0, dtype=self.dtype))
-        Ven12 = Vi(An12,xnS,tf.constant(12.0, dtype=self.dtype))
+        Rkn = Rk(xnS, 'negative') # This is the sum of the Redlich-Kister expansion terms for the negative electrode
+        # Apparently it approximates the non-ideal internal voltage for this pure physics model
 
-        Vep = parameters.U0p + parameters.R*Tb/parameters.F*tf.math.log((1-xpS)/xpS) + Vep0 + Vep1 + Vep2 + Vep3 + Vep4 + Vep5 + Vep6 + Vep7 + Vep8 + Vep9 + Vep10 + Vep11 + Vep12
-        Ven = parameters.U0n + parameters.R*Tb/parameters.F*tf.math.log((1-xnS)/xnS) + Ven0 + Ven1 + Ven2 + Ven3 + Ven4 + Ven5 + Ven6 + Ven7 + Ven8 + Ven9 + Ven10 + Ven11 + Ven12
-        V = Vep - Ven - Vo - Vsn - Vsp
+        print(f'Rkn: {Rkn}')
 
-        return V
+        # This stuff below is the equilibrium potential formula (Butler-Volmer) for the positive and negative electrodes
+        Vep = Rk.parameters["positive"]["U0"] + parameters["R"]*Tb/parameters["F"]*tf.math.log((1-xpS)/xpS) + Rkp
+        Ven = Rk.parameters["negative"]["U0"] + parameters["R"]*Tb/parameters["F"]*tf.math.log((1-xnS)/xnS) + Rkn
+       
+        print(f'Vep: {Vep}')
+        print(f'VeN: {Ven}')
+        print(f'Vo: {Vo}')
+        print(f'Vsn: {Vsn}')
+        print(f'Vsp: {Vsp}')
+
+        V = Vep - Ven - Vo - Vsn - Vsp # Voltage Increment formula (Butler-Volmer)
+
+        return V # This is the output voltage
 
     @tf.function
     def getNextState(self,X,U):
@@ -281,127 +383,73 @@ class BatteryCellPhy(keras.layers.Layer):
 
         # Extract inputs
         # P = U[:,0]
-        i = U[:,0]
+        i = U[:,0] # Current
 
-        parameters = self
+        parameters = self.parameters # I think here should be self.parameters instead
 
-        Ap0 = parameters.Ap0 * parameters.BASE_Ap0
-        Ap1 = parameters.Ap1 * parameters.BASE_Ap1
-        Ap2 = parameters.Ap2 * parameters.BASE_Ap2
-        Ap3 = parameters.Ap3 * parameters.BASE_Ap3
-        Ap4 = parameters.Ap4 * parameters.BASE_Ap4
-        Ap5 = parameters.Ap5 * parameters.BASE_Ap5
-        Ap6 = parameters.Ap6 * parameters.BASE_Ap6
-        Ap7 = parameters.Ap7 * parameters.BASE_Ap7
-        Ap8 = parameters.Ap8 * parameters.BASE_Ap8
-        Ap9 = parameters.Ap9 * parameters.BASE_Ap9
-        Ap10 = parameters.Ap10 * parameters.BASE_Ap10
-        Ap11 = parameters.Ap11 * parameters.BASE_Ap11
-        Ap12 = parameters.Ap12 * parameters.BASE_Ap12
+        xpS = qpS/parameters["qSMax"] # This is the mole fraction of the positive electrode surface, it is the xi = qi/qmax for i = p in the equilibrium potential formula (Butler-Volmer)
 
-        An0 = parameters.An0 * parameters.BASE_An0
-
-        An1 = parameters.An1
-        An2 = parameters.An2
-        An3 = parameters.An3
-        An4 = parameters.An4
-        An5 = parameters.An5
-        An6 = parameters.An6
-        An7 = parameters.An7
-        An8 = parameters.An8
-        An9 = parameters.An9
-        An10 = parameters.An10
-        An11 = parameters.An11
-        An12 = parameters.An12
-
-
-        # Redlich-Kister expansion item
-        # Vi = lambda A,x,i: A*((2*x-1)**(i+1) - (2*x*i*(1-x))/(2*x-1)**(1-i))/parameters.F
-        # Vi = self.safe_Vi
-        # Vi = self.Vi
-
-        xpS = qpS/parameters.qSMax
-
-        # Vep0 = Vi(Ap0,xpS,tf.constant(0.0, dtype=self.dtype))
-        # Vep1 = Vi(Ap1,xpS,tf.constant(1.0, dtype=self.dtype))
-        # Vep2 = Vi(Ap2,xpS,tf.constant(2.0, dtype=self.dtype))
-        # Vep3 = Vi(Ap3,xpS,tf.constant(3.0, dtype=self.dtype))
-        # Vep4 = Vi(Ap4,xpS,tf.constant(4.0, dtype=self.dtype))
-        # Vep5 = Vi(Ap5,xpS,tf.constant(5.0, dtype=self.dtype))
-        # Vep6 = Vi(Ap6,xpS,tf.constant(6.0, dtype=self.dtype))
-        # Vep7 = Vi(Ap7,xpS,tf.constant(7.0, dtype=self.dtype))
-        # Vep8 = Vi(Ap8,xpS,tf.constant(8.0, dtype=self.dtype))
-        # Vep9 = Vi(Ap9,xpS,tf.constant(9.0, dtype=self.dtype))
-        # Vep10 = Vi(Ap10,xpS,tf.constant(10.0, dtype=self.dtype))
-        # Vep11 = Vi(Ap11,xpS,tf.constant(11.0, dtype=self.dtype))
-        # Vep12 = Vi(Ap12,xpS,tf.constant(12.0, dtype=self.dtype))
-
-        xnS = qnS/parameters.qSMax
-
-        # Ven0 = Vi(An0,xnS,tf.constant(0.0, dtype=self.dtype))
-        # Ven1 = Vi(An1,xnS,tf.constant(1.0, dtype=self.dtype))
-        # Ven2 = Vi(An2,xnS,tf.constant(2.0, dtype=self.dtype))
-        # Ven3 = Vi(An3,xnS,tf.constant(3.0, dtype=self.dtype))
-        # Ven4 = Vi(An4,xnS,tf.constant(4.0, dtype=self.dtype))
-        # Ven5 = Vi(An5,xnS,tf.constant(5.0, dtype=self.dtype))
-        # Ven6 = Vi(An6,xnS,tf.constant(6.0, dtype=self.dtype))
-        # Ven7 = Vi(An7,xnS,tf.constant(7.0, dtype=self.dtype))
-        # Ven8 = Vi(An8,xnS,tf.constant(8.0, dtype=self.dtype))
-        # Ven9 = Vi(An9,xnS,tf.constant(9.0, dtype=self.dtype))
-        # Ven10 = Vi(An10,xnS,tf.constant(10.0, dtype=self.dtype))
-        # Ven11 = Vi(An11,xnS,tf.constant(11.0, dtype=self.dtype))
-        # Ven12 = Vi(An12,xnS,tf.constant(12.0, dtype=self.dtype))
-
-        # Vep = parameters.U0p + parameters.R*Tb/parameters.F*tf.math.log((1-xpS)/xpS) + Vep0 + Vep1 + Vep2 + Vep3 + Vep4 + Vep5 + Vep6 + Vep7 + Vep8 + Vep9 + Vep10 + Vep11 + Vep12
-        # Ven = parameters.U0n + parameters.R*Tb/parameters.F*tf.math.log((1-xnS)/xnS) + Ven0 + Ven1 + Ven2 + Ven3 + Ven4 + Ven5 + Ven6 + Ven7 + Ven8 + Ven9 + Ven10 + Ven11 + Ven12
-        # V = Vep - Ven - Vo - Vsn - Vsp
-
+        xnS = qnS/parameters["qSMax"] # This is the mole fraction of the negative electrode surface, it is the xi = qi/qmax for i = n in the equilibrium potential formula (Butler-Volmer)
 
         # Constraints
-        Tbdot = tf.zeros(X.shape[0], dtype=self.dtype)
-        CnBulk = qnB/parameters.VolB
-        CnSurface = qnS/parameters.VolS
-        CpSurface = qpS/parameters.VolS
-        CpBulk = qpB/parameters.VolB
-        qdotDiffusionBSn = (CnBulk-CnSurface)/parameters.tDiffusion
-        qnBdot = - qdotDiffusionBSn
-        Jn0 = parameters.kn*(1-xnS)**parameters.alpha*(xnS)**parameters.alpha
-        qdotDiffusionBSp = (CpBulk-CpSurface)/parameters.tDiffusion
-        Jp0 = parameters.kp*(1-xpS)**parameters.alpha*(xpS)**parameters.alpha
+        Tbdot = tf.zeros(X.shape[0], dtype=self.dtype) # Constant temperature?
+
+        # Parameters to calculate the diffusion rates
+        CnBulk = qnB/parameters["VolB"]
+        CnSurface = qnS/parameters["VolS"]
+        CpSurface = qpS/parameters["VolS"]
+        CpBulk = qpB/parameters["VolB"]
+
+        qdotDiffusionBSn = (CnBulk-CnSurface)/parameters["tDiffusion"] # Diffusion rate from the bulk to the surface at the negative electrode
+        
+        qnBdot = - qdotDiffusionBSn 
+        
+        Jn0 = parameters["kn"]*(1-xnS)**parameters["alpha"]*(xnS)**parameters["alpha"] # Exchange current density at the negative electrode at voltage increment formula (butler-volmer)
+        
+        qdotDiffusionBSp = (CpBulk-CpSurface)/parameters["tDiffusion"] # Diffusion rate from the bulk to the surface at the positive electrode
+        
+        Jp0 = parameters["kp"]*(1-xpS)**parameters["alpha"]*(xpS)**parameters["alpha"] # Exchange current density at the positive electrode at voltage increment formula (butler-volmer)
+        
         qpBdot = - qdotDiffusionBSp
         # i = P/V
         qpSdot = i + qdotDiffusionBSp
-        Jn = i/parameters.Sn
-        VoNominal = i*parameters.Ro
-        Jp = i/parameters.Sp
+
+        Jn = i/parameters["Sn"] # Current density at the negative electrode at voltage increment formula (butler-volmer)
+
+        VoNominal = i*parameters["Ro"] # This is V0 = R0*iapp from the voltage increment formula (butler-volmer)
+
+        Jp = i/parameters["Sp"] # Current density at the positive electrode at voltage increment formula (butler-volmer)
+        
         qnSdot = qdotDiffusionBSn - i
-        VsnNominal = parameters.R*Tb/parameters.F/parameters.alpha*tf.math.asinh(Jn/(2*Jn0))
-        Vodot = (VoNominal-Vo)/parameters.to
-        VspNominal = parameters.R*Tb/parameters.F/parameters.alpha*tf.math.asinh(Jp/(2*Jp0))
-        Vsndot = (VsnNominal-Vsn)/parameters.tsn
-        Vspdot = (VspNominal-Vsp)/parameters.tsp
+
+        VsnNominal = parameters["R"]*Tb/parameters["F"]/parameters["alpha"]*tf.math.asinh(Jn/(2*Jn0)) # Vn,i for i = n at voltage increment formula (butler-volmer)
+        
+        Vodot = (VoNominal-Vo)/parameters["to"]
+        VspNominal = parameters["R"]*Tb/parameters["F"]/parameters["alpha"]*tf.math.asinh(Jp/(2*Jp0)) # Vn,i for i = p at voltage increment formula (butler-volmer)
+        Vsndot = (VsnNominal-Vsn)/parameters["tsn"]
+        Vspdot = (VspNominal-Vsp)/parameters["tsp"]
 
         dt = self.dt
         # Update state
         XNew = tf.stack([
-            Tb + Tbdot*dt,
-            Vo + Vodot*dt,
-            Vsn + Vsndot*dt,
-            Vsp + Vspdot*dt,
-            qnB + qnBdot*dt,
-            qnS + qnSdot*dt,
-            qpB + qpBdot*dt,
-            qpS + qpSdot*dt
+            Tb + Tbdot*dt, # Some kind of temperature?
+            Vo + Vodot*dt, # Next V0 to calculate V for voltage increment formula (butler-volmer)
+            Vsn + Vsndot*dt, # Next vs,i with i = n for calculating qmaxs,i
+            Vsp + Vspdot*dt, # Next vs,i with i = p for calculating qmaxs,i
+            qnB + qnBdot*dt, # To calculate Qn
+            qnS + qnSdot*dt, # To calculate Qn
+            qpB + qpBdot*dt, # To calculate Qp
+            qpS + qpSdot*dt # To calculate Qp
         ], axis = 1)
 
         return XNew
 
     def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
-        P = self
+        P = self.parameters
 
         if self.initial_state is None:
             initial_state = tf.ones([batch_size] + tensor_shape.as_shape(self.state_size).as_list(), dtype=self.dtype) \
-                 * tf.constant([[292.1, 0.0, 0.0, 0.0, P.qnBMax.numpy(), P.qnSMax.numpy(), P.qpBMin.numpy(), P.qpSMin.numpy()]], dtype=self.dtype)  # 292.1 K, about 18.95 C
+                 * tf.constant([[292.1, 0.0, 0.0, 0.0, P["qnBMax"].numpy(), P["qnSMax"].numpy(), P["qpBMin"].numpy(), P["qpSMin"].numpy()]], dtype=self.dtype)  # 292.1 K, about 18.95 C
         else:
             initial_state = ops.convert_to_tensor(self.initial_state, dtype=self.dtype)
 
@@ -634,8 +682,8 @@ class BatteryCell(keras.layers.Layer):
         # VenMLP = self.MLPn(tf.expand_dims(xnS,1))[:,0] * self.MLPnFACTOR
 
         # VepMLP = self.MLPp(tf.stack([xpS, i],1))[:,0]
-        VepMLP = self.MLPp(tf.expand_dims(xpS,1))[:,0]
-        VenMLP = self.MLPn(tf.expand_dims(xnS,1))[:,0]
+        VepMLP = self.MLPp(tf.expand_dims(xpS,1))[:,0] # Gets the output non-ideal internal voltage for the positive electrode based on the mole fraction of the positive electrode surface
+        VenMLP = self.MLPn(tf.expand_dims(xnS,1))[:,0] # Gets the output non-ideal internal voltage for the negative electrode based on the mole fraction of the negative electrode surface
 
         # if training:
         safe_log_p = tf.clip_by_value((1-xpS)/xpS,1e-18,1e+18)
@@ -765,3 +813,200 @@ class BatteryCell(keras.layers.Layer):
 
         # tf.print('Initial state:', initial_state[:,4:])
         return initial_state
+    
+
+
+
+if __name__ == "__main__":
+   
+    # Compare the sum of the individual Vi terms to the final output of the redlich-kister expansion
+    DTYPE = 'float64'
+    inputs = np.ones((1,3100,1),dtype=DTYPE)*8.0 # Constant Load
+
+    cell = BatteryCellPhy(dtype=DTYPE)
+
+    parameters = cell.parameters
+    print(parameters)
+
+    rnn = tf.keras.layers.RNN(cell, return_sequences=False, stateful=False, batch_input_shape=inputs.shape, return_state=False, dtype=DTYPE)
+
+    outputs = []
+    H = []
+    grads = []
+
+    with tf.GradientTape() as t:
+        out = rnn(inputs)
+
+        for i in range(500):
+            if i==0:
+                out, states = cell(inputs[:,0, :], [cell.get_initial_state(batch_size=inputs.shape[0])])
+            else:
+                out, states = cell(inputs[:,i, :], states)
+
+            with t.stop_recording():
+                o = out.numpy()
+                s = states[0].numpy()
+                g = t.gradient(out, cell.VintFn.parameters["positive"]["As"][0]).numpy()
+                outputs.append(o)
+                H.append(s)
+                grads.append(g)
+                print("t:{}, V:{}, dV_dAp0:{}".format(i, o, g))
+                print("states:{}".format(s))
+
+    #print("Output:", out)
+    #print(t.gradient(out, cell.Ap0))
+
+    #out = rnn(inputs)
+
+    print(f"\n{out}")
+
+    # Test RK and Vi
+    """ # Redlich-Kister parameters (positive electrode)
+    U0p = tf.constant(4.03, dtype=DTYPE)
+
+    BASE_Ap0 = tf.constant(-31593.7, dtype=DTYPE)
+    BASE_Ap1 = tf.constant(0.106747, dtype=DTYPE)
+    BASE_Ap2 = tf.constant(24606.4, dtype=DTYPE)
+    BASE_Ap3 = tf.constant(-78561.9, dtype=DTYPE)
+    BASE_Ap4 = tf.constant(13317.9, dtype=DTYPE)
+    BASE_Ap5 = tf.constant(307387.0, dtype=DTYPE)
+    BASE_Ap6 = tf.constant(84916.1, dtype=DTYPE)
+    BASE_Ap7 = tf.constant(-1.07469e+06, dtype=DTYPE)
+    BASE_Ap8 = tf.constant(2285.04, dtype=DTYPE)
+    BASE_Ap9 = tf.constant(990894.0, dtype=DTYPE)
+    BASE_Ap10 = tf.constant(283920.0, dtype=DTYPE)
+    BASE_Ap11 = tf.constant(-161513.0, dtype=DTYPE)
+    BASE_Ap12 = tf.constant(-469218.0, dtype=DTYPE)
+
+    Ap0 = tf.Variable(1.0, dtype=DTYPE)
+    Ap1 = tf.Variable(1.0, dtype=DTYPE)
+    Ap2 = tf.Variable(1.0, dtype=DTYPE)
+    Ap3 = tf.Variable(1.0, dtype=DTYPE)
+    Ap4 = tf.Variable(1.0, dtype=DTYPE)
+    Ap5 = tf.Variable(1.0, dtype=DTYPE)
+    Ap6 = tf.Variable(1.0, dtype=DTYPE)
+    Ap7 = tf.Variable(1.0, dtype=DTYPE)
+    Ap8 = tf.Variable(1.0, dtype=DTYPE)
+    Ap9 = tf.Variable(1.0, dtype=DTYPE)
+    Ap10 = tf.Variable(1.0, dtype=DTYPE)
+    Ap11 = tf.Variable(1.0, dtype=DTYPE)
+    Ap12 = tf.Variable(1.0, dtype=DTYPE)
+
+    # Redlich-Kister parameters (negative electrode)
+    U0n = tf.constant(0.01, dtype=DTYPE)
+
+    BASE_An0 = tf.constant(86.19, dtype=DTYPE)
+    An0 = tf.Variable(1.0, dtype=DTYPE)
+
+    An1 = tf.constant(0, dtype=DTYPE)
+    An2 = tf.constant(0, dtype=DTYPE)
+    An3 = tf.constant(0, dtype=DTYPE)
+    An4 = tf.constant(0, dtype=DTYPE)
+    An5 = tf.constant(0, dtype=DTYPE)
+    An6 = tf.constant(0, dtype=DTYPE)
+    An7 = tf.constant(0, dtype=DTYPE)
+    An8 = tf.constant(0, dtype=DTYPE)
+    An9 = tf.constant(0, dtype=DTYPE)
+    An10 = tf.constant(0, dtype=DTYPE)
+    An11 = tf.constant(0, dtype=DTYPE)
+    An12 = tf.constant(0, dtype=DTYPE)
+
+    Ap0 = Ap0 * BASE_Ap0
+    Ap1 = Ap1 * BASE_Ap1
+    Ap2 = Ap2 * BASE_Ap2
+    Ap3 = Ap3 * BASE_Ap3
+    Ap4 = Ap4 * BASE_Ap4
+    Ap5 = Ap5 * BASE_Ap5
+    Ap6 = Ap6 * BASE_Ap6
+    Ap7 = Ap7 * BASE_Ap7
+    Ap8 = Ap8 * BASE_Ap8
+    Ap9 = Ap9 * BASE_Ap9
+    Ap10 = Ap10 * BASE_Ap10
+    Ap11 = Ap11 * BASE_Ap11
+    Ap12 = Ap12 * BASE_Ap12
+
+    An0 = An0 * BASE_An0
+
+    An1 = An1
+    An2 = An2
+    An3 = An3
+    An4 = An4
+    An5 = An5
+    An6 = An6
+    An7 = An7
+    An8 = An8
+    An9 = An9
+    An10 = An10
+    An11 = An11
+    An12 = An12
+
+    F = tf.constant(96487, dtype=DTYPE)
+
+    def Vi(A, x, i):
+        # epsilon = tf.constant(1e-16, dtype=DTYPE)
+        # n_epsilon = tf.math.negative(epsilon)
+        temp_x = tf.math.multiply(tf.constant(2.0, dtype=DTYPE),x) # 2x
+        temp_x = tf.math.subtract(temp_x,tf.constant(1.0, dtype=DTYPE)) # 2x - 1
+
+
+        pow_1 = tf.math.pow(temp_x, tf.math.add(i, tf.constant(1.0, dtype=DTYPE))) # (2x-1)^(i+1)
+        # pow_1 = tf.clip_by_value(tf.math.pow(temp_x, tf.math.add(i, tf.constant(1.0, dtype=DTYPE))), n_epsilon, epsilon)
+        pow_2 = tf.math.pow(temp_x, tf.math.subtract(tf.constant(1.0, dtype=DTYPE), i)) # (2x-1)^(1-i)
+        # pow_2 = tf.clip_by_value(tf.math.pow(temp_x, tf.math.subtract(tf.constant(1.0, dtype=DTYPE), i)), n_epsilon, epsilon)
+        temp_2xk = tf.math.multiply(tf.math.multiply_no_nan(x,i), tf.constant(2.0, dtype=DTYPE)) # 2xi
+        temp_2xk = tf.math.multiply_no_nan(tf.math.subtract(tf.constant(1.0, dtype=DTYPE), x), temp_2xk) # 2xi(1-x)
+        div = tf.math.divide_no_nan(temp_2xk, pow_2) # (2xi(1-x))/(2x-1)^(1-i)
+        denum = tf.math.multiply_no_nan(tf.math.subtract(pow_1, div), A) # A*((2x-1)^(i+1) - (2xi(1-x))/(2x-1)^(1-i))
+        ret = tf.math.divide_no_nan(denum, tf.constant(F, dtype=DTYPE)) # A*((2x-1)^(i+1) - (2xi(1-x))/(2x-1)^(1-i))/F
+
+        return ret
+        # return A*((2*x-1)**(i+1) - (2*x*i*(1-x))/(2*x-1)**(1-i))/self.F
+
+    xpS = parameters['qpSMin']/parameters['qSMax'] # This is the mole fraction of the positive electrode surface, it is the xi = qi/qmax for i = p in the equilibrium potential formula (Butler-Volmer)
+
+
+    Vep0 = Vi(Ap0,xpS,tf.constant(0.0, dtype=DTYPE))
+    Vep1 = Vi(Ap1,xpS,tf.constant(1.0, dtype=DTYPE))
+    Vep2 = Vi(Ap2,xpS,tf.constant(2.0, dtype=DTYPE))
+    Vep3 = Vi(Ap3,xpS,tf.constant(3.0, dtype=DTYPE))
+    Vep4 = Vi(Ap4,xpS,tf.constant(4.0, dtype=DTYPE))
+    Vep5 = Vi(Ap5,xpS,tf.constant(5.0, dtype=DTYPE))
+    Vep6 = Vi(Ap6,xpS,tf.constant(6.0, dtype=DTYPE))
+    Vep7 = Vi(Ap7,xpS,tf.constant(7.0, dtype=DTYPE))
+    Vep8 = Vi(Ap8,xpS,tf.constant(8.0, dtype=DTYPE))
+    Vep9 = Vi(Ap9,xpS,tf.constant(9.0, dtype=DTYPE))
+    Vep10 = Vi(Ap10,xpS,tf.constant(10.0, dtype=DTYPE))
+    Vep11 = Vi(Ap11,xpS,tf.constant(11.0, dtype=DTYPE))
+    Vep12 = Vi(Ap12,xpS,tf.constant(12.0, dtype=DTYPE))
+
+    xnS = parameters['qnSMax']/parameters['qSMax'] # This is the mole fraction of the negative electrode surface, it is the xi = qi/qmax for i = n in the equilibrium potential formula (Butler-Volmer)
+
+    Ven0 = Vi(An0,xnS,tf.constant(0.0, dtype=DTYPE))
+    Ven1 = Vi(An1,xnS,tf.constant(1.0, dtype=DTYPE))
+    Ven2 = Vi(An2,xnS,tf.constant(2.0, dtype=DTYPE))
+    Ven3 = Vi(An3,xnS,tf.constant(3.0, dtype=DTYPE))
+    Ven4 = Vi(An4,xnS,tf.constant(4.0, dtype=DTYPE))
+    Ven5 = Vi(An5,xnS,tf.constant(5.0, dtype=DTYPE))
+    Ven6 = Vi(An6,xnS,tf.constant(6.0, dtype=DTYPE))
+    Ven7 = Vi(An7,xnS,tf.constant(7.0, dtype=DTYPE))
+    Ven8 = Vi(An8,xnS,tf.constant(8.0, dtype=DTYPE))
+    Ven9 = Vi(An9,xnS,tf.constant(9.0, dtype=DTYPE))
+    Ven10 = Vi(An10,xnS,tf.constant(10.0, dtype=DTYPE))
+    Ven11 = Vi(An11,xnS,tf.constant(11.0, dtype=DTYPE))
+    Ven12 = Vi(An12,xnS,tf.constant(12.0, dtype=DTYPE))
+
+    Vnon_idealP_VI = Vep0 + Vep1 + Vep2 + Vep3 + Vep4 + Vep5 + Vep6 + Vep7 + Vep8 + Vep9 + Vep10 + Vep11 + Vep12
+    Vnon_idealN_VI = Ven0 + Ven1 + Ven2 + Ven3 + Ven4 + Ven5 + Ven6 + Ven7 + Ven8 + Ven9 + Ven10 + Ven11 + Ven12
+
+    print("V non-ideal P VI:", Vnon_idealP_VI)
+    print("V non-ideal N VI:", Vnon_idealN_VI)
+
+    rk = RedlichKisterExpansion(U0p=None, U0n=None, Aps=None, Ans=None, F=F)
+
+    print(rk.parameters)
+
+    Vnon_idealP_RK = rk(xpS, 'positive')
+    Vnon_idealN_RK = rk(xnS, 'negative')
+
+    print("V non-ideal P RK:", Vnon_idealP_RK)
+    print("V non-ideal N RK:", Vnon_idealN_RK) """

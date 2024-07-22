@@ -1,0 +1,8 @@
+- BatteryParameters.py has the parameters for the batteries.
+- Images folder contains the generated images.
+- mlp_tests.py has code that fits MLP to Vint and saves the weights and biases to use as initial_weights.
+- model.py has code that defines a function that creates a model using either analytical of withMLP, centralizing the model creation.
+- AnalyticalModel.py is the analytical model.
+- WithMLPModel.py is the model with MLP but without bayesian stuff. 
+- BatteryModelTesting.py is a file showing how to use the model defined in model.py and plotting some comparisons
+- LearnableAnalyticalModel.py and learnableParamsInvestigation.py are the scripts where we attempt to make the parameters of the battery learnable, but it is not working yet.

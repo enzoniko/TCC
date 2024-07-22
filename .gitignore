@@ -1,0 +1,6 @@
+Data/
+
+*.png
+*.npy
+__pycache__/
+*.h5
