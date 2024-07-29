@@ -5,7 +5,7 @@ import argparse
 import matplotlib
 import matplotlib.pyplot as plt
 
-from battery_data import getDischargeMultipleBatteries
+from BatteryData import getDischargeMultipleBatteries
 
 matplotlib.rc('font', size=14)
 

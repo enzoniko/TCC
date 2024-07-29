@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from Model import get_model
 
-from battery_data import getDischargeMultipleBatteries
+from BatteryData import getDischargeMultipleBatteries
 
 matplotlib.rc('font', size=14)
 
