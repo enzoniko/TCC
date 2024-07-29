@@ -67,7 +67,7 @@ class WithMLPBatteryRNNCell(Layer):
 
     def initBatteryParams(self, batch_size, D_trainable):
         P = self
-        defaultParams = default_parameters(learnable=True)
+        defaultParams = default_parameters(learnable=False)
 
         # Sets base values for qmax and R0 if not provided
         if self.q_max_base_value is None:
@@ -103,7 +103,6 @@ class WithMLPBatteryRNNCell(Layer):
         # P.qMax = tf.Variable(np.ones(batch_size)*initial_q_max, constraint=constraint_q_max, dtype=self.dtype)  # init 0.1 - resp 0.1266
         # P.Ro = tf.Variable(np.ones(batch_size)*initial_R_0, constraint=constraint, dtype=self.dtype)   # init 0.15 - resp 0.117215
 
-        # TODO: Stopped analysis here, continue below...
         if self.q_max_model is None:
             P.qMax = tf.Variable(np.ones(batch_size)*initial_q_max, constraint=constraint_q_max, dtype=self.dtype, name="qMax")  # init 0.1 - resp 0.1266
         else:
@@ -157,7 +156,7 @@ class WithMLPBatteryRNNCell(Layer):
         P.tsp = defaultParams['tsp']     # for surface overpotential (pos)
 
         # Redlich-Kister parameters (positive electrode)
-        rkexp = rkexp_default_parameters(learnable=True)
+        rkexp = rkexp_default_parameters(learnable=False)
         P.U0p = rkexp['positive']['U0'] 
 
         # Redlich-Kister parameters (negative electrode)

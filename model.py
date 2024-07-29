@@ -29,7 +29,7 @@ class BatteryModel:
 
     def _get_model(self, batch_input_shape, return_sequences, stateful, dtype, dt, mlp, mlp_trainable, share_q_r, q_max_base, R_0_base, D_trainable):
         model = tf.keras.Sequential()
-        model.add(tf.keras.layers.InputLayer(batch_input_shape=batch_input_shape))
+        model.add(tf.keras.layers.InputLayer(batch_input_shape=(self.batch_size, batch_input_shape[1], batch_input_shape[2])))
         if mlp:
             model.add(tf.keras.layers.RNN(WithMLPBatteryRNNCell(dtype=dtype, dt=dt, mlp_trainable=mlp_trainable, batch_size=self.batch_size, q_max_base=q_max_base, R_0_base=R_0_base, D_trainable=D_trainable), return_sequences=return_sequences, stateful=stateful, dtype=dtype))
         else:
@@ -62,6 +62,17 @@ class BatteryModel:
                 continue
             print(f'{key}: {value}')
 
+def masked_mae_loss(y_true, y_pred):
+    # Create a mask for valid values (non-NaN)
+    mask = tf.math.is_finite(y_true) & tf.math.is_finite(y_pred)
+    
+    # Apply the mask to y_true and y_pred
+    y_true_masked = tf.boolean_mask(y_true, mask)
+    y_pred_masked = tf.boolean_mask(y_pred, mask)
+    
+    # Calculate the mean absolute error on valid values
+    loss = tf.reduce_mean(tf.abs(y_true_masked - y_pred_masked))
+    return loss
 
 ################ TEST FUNCTIONS ################
 
@@ -96,7 +107,7 @@ def plot_outputs(inputs, outputs, save_path):
         plt.plot(outputs[i, :], color=cmap(i / outputs.shape[0]))
     plt.ylabel('Vm (V)')
     plt.grid()
-    plt.ylim([0, 4])  # Limit y-axis to [0, 4]
+    plt.ylim([3, 5])  # Limit y-axis to [0, 4]
 
     plt.xlabel('Time (s)')
 

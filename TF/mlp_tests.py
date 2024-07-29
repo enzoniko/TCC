@@ -112,8 +112,9 @@ plt.plot(X,pred, color='red', label='pred')
 plt.legend()
 plt.grid()
 
+plt.show()
 # plt.savefig("Images/mlp_initial_weight_with-I.png")
-plt.savefig("Images/mlp_initial_weight.png")
+#plt.savefig("Images/mlp_initial_weight.png")
 
 # %%
 

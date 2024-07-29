@@ -7,7 +7,7 @@ import tensorflow as tf
 
 from model import get_model
 
-from battery_data import getDischargeMultipleBatteries
+from BatteryData import getDischargeMultipleBatteries
 
 DTYPE = 'float64'
 tf.keras.backend.set_floatx(DTYPE)

@@ -32,7 +32,7 @@ class AnalyticalBatteryRNNCell(Layer):
     def initBatteryParams(self):
         """ Initialize the battery parameters """
         P = self
-        defaultParams = default_parameters(learnable=False)
+        defaultParams = default_parameters(learnable=True)
         P.xnMax = defaultParams['xnMax']         # Mole fractions on negative electrode (max)
         P.xnMin = defaultParams['xnMin']          # Mole fractions on negative electrode (min)
         P.xpMax = defaultParams['xpMax']          # Mole fractions on positive electrode (max)
@@ -101,7 +101,7 @@ class AnalyticalBatteryRNNCell(Layer):
         P.tsp = defaultParams['tsp']     # for surface overpotential (pos)
 
         # Redlich-Kister default parameters
-        rkexp = rkexp_default_parameters(learnable=False)
+        rkexp = rkexp_default_parameters(learnable=True)
 
         # RK parameters (positive electrode)
         P.U0p = rkexp['positive']['U0']
@@ -424,10 +424,10 @@ class AnalyticalBatteryRNNCell(Layer):
         """ Get the initial state of the battery model is setting the initial temperature to 292.1 K if not specified """
         P = self
 
-        tf.print(f"qnBMax: {P.qnBMax}")
+        """ tf.print(f"qnBMax: {P.qnBMax}")
         tf.print(f"qnSMax: {P.qnSMax}")
         tf.print(f"qpBMin: {P.qpBMin}")
-        tf.print(f"qpSMin: {P.qpSMin}")
+        tf.print(f"qpSMin: {P.qpSMin}") """
 
         if self.initial_state is None:
             initial_state = tf.ones([batch_size] + tensor_shape.as_shape(self.state_size).as_list(), dtype=self.dtype) \

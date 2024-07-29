@@ -311,6 +311,8 @@ class AnalyticalBatteryRNNCell(Layer):
     def getNextState(self,X,U):
         
         """ Compute the new states of the battery model based on the current states and input """
+        #tf.debugging.check_numerics(X, "State X contain NaNs")
+
         # Extract states
         Tb = X[:,0]
         Vo = X[:,1]
@@ -326,10 +328,9 @@ class AnalyticalBatteryRNNCell(Layer):
 
         parameters = self
 
-        xpS = qpS/parameters.qSMax # This is the mole fraction of the positive electrode surface, it is the xi = qi/qmax for i = p in the equilibrium potential formula (Butler-Volmer)
+        xpS = tf.clip_by_value(qpS/parameters.qSMax, 0, 1) # This is the mole fraction of the positive electrode surface, it is the xi = qi/qmax for i = p in the equilibrium potential formula (Butler-Volmer)
 
-        xnS = qnS/parameters.qSMax # This is the mole fraction of the negative electrode surface, it is the xi = qi/qmax for i = n in the equilibrium potential formula (Butler-Volmer)
-
+        xnS = tf.clip_by_value(qnS/parameters.qSMax, 0, 1) # This is the mole fraction of the negative electrode surface, it is the xi = qi/qmax for i = n in the equilibrium potential formula (Butler-Volmer)
         # Constraints
         Tbdot = tf.zeros(X.shape[0], dtype=self.dtype) # Constant temperature?
 
@@ -368,6 +369,32 @@ class AnalyticalBatteryRNNCell(Layer):
         Vspdot = (VspNominal-Vsp)/parameters.tsp
 
         dt = self.dt
+
+        # Print intermediate variables for debugging
+        """ tf.print("xpS:", xpS)
+        tf.print("xnS:", xnS)
+        tf.print("CnBulk:", CnBulk)
+        tf.print("CnSurface:", CnSurface)
+        tf.print("CpBulk:", CpBulk)
+        tf.print("CpSurface:", CpSurface)
+        tf.print("Jn0:", Jn0)
+        tf.print("Jp0:", Jp0)
+        tf.print("Jn:", Jn)
+        tf.print("Jp:", Jp)
+        tf.print("VsnNominal:", VsnNominal)
+        tf.print("VspNominal:", VspNominal)
+        # Check for NaNs
+        # List of variables and their names
+        variables_dot = [Tbdot, Vodot, Vsndot, Vspdot, qnBdot, qnSdot, qpBdot, qpSdot]
+        variable_names = ['Tbdot', 'Vodot', 'Vsndot', 'Vspdot', 'qnBdot', 'qnSdot', 'qpBdot', 'qpSdot']
+
+        # Check for NaNs using tf.debugging.check_numerics and report which variables have NaNs
+        for var, name in zip(variables_dot, variable_names):
+            try:
+                tf.debugging.check_numerics(var, f"{name} has NaNs")
+            except tf.errors.InvalidArgumentError as e:
+                print(e.message) """
+        
         # Update state
         XNew = tf.stack([
             Tb + Tbdot*dt, # Temperature
@@ -380,6 +407,10 @@ class AnalyticalBatteryRNNCell(Layer):
             qpS + qpSdot*dt # To calculate Qp
         ], axis = 1)
 
+
+        #tf.debugging.check_numerics(XNew, "State Xnew updates contain NaNs")
+
+        #tf.print("State update magnitude: ", tf.reduce_min(tf.abs(XNew - X)))
         return XNew
 
     def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
@@ -412,7 +443,7 @@ def initialize_inputs(dtype, example='constant_noise', shape=(8, 3100, 1)):
 
 # Function to create and test the RNN cell
 def test_rnn_cell(inputs, DTYPE):
-    cell = AnalyticalBatteryRNNCell(dtype=DTYPE, dt=1.0)
+    cell = AnalyticalBatteryRNNCell(dtype=DTYPE, dt=10.0)
     rnn = tf.keras.layers.RNN(cell, return_sequences=False, stateful=False, batch_input_shape=inputs.shape, return_state=False, dtype=DTYPE)
 
     outputs, H, grads = [], [], []
@@ -450,7 +481,7 @@ def plot_outputs(outputs):
 # Main function
 def main():
     initial_time = time()
-    inputs_shape = (8, 3100, 1)
+    inputs_shape = (8, 80, 1)
     
     # Change the example parameter to test different input types
     inputs = initialize_inputs(DTYPE, example='constant_noise', shape=inputs_shape)
