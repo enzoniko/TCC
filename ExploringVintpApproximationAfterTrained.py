@@ -22,7 +22,7 @@ def initialize_inputs(dtype, example='constant_noise', shape=(8, 3100, 1), max_c
         data_RW = getDischargeMultipleBatteries()
 
         # Pad the data
-        padded_data, dt = process_battery_data(data_RW, max_steps=10, EOD=3.2)
+        padded_data, dt = process_battery_data(data_RW, max_steps=5, EOD=3.2)
 
         print(f"DT: {dt}")
 
@@ -60,6 +60,44 @@ def compare_outputs(analytical_output, withMLP_output, save_path):
     plt.savefig(save_path)
     plt.close()
 
+def test_approximation(mlp):
+
+    Ap = np.array([
+        -31593.7,
+        0.106747,
+        24606.4,
+        -78561.9,
+        13317.9,
+        307387.0,
+        84916.1,
+        -1.07469e+06,
+        2285.04,
+        990894.0,
+        283920,
+        -161513,
+        -469218
+    ])
+    
+    F = 96487.0
+    V_INT_k = lambda x,i: (2*x-1)**(i+1) - (2*x*i*(1-x))/(2*x-1)**(1-i)
+
+    V_INT = lambda x,A: np.dot(A, np.array([V_INT_k(x,i) for i in range(len(A))])) / F
+
+    def Ai(A,i,a):
+        A[i]=a
+        return A
+
+    X = np.linspace(0.0,1,150) 
+    # I = np.ones(100) * 8
+    Vintp = np.array([V_INT(x,Ap) for x in X])
+
+    pred = mlp.predict(X)
+
+    # Calculate the MAE between Vintp and pred
+    mae = np.mean(np.abs(Vintp - pred))
+
+    print(f'MAE RK approx: {mae}')
+
 def main():
     num_batteries = 12
     example = 'real_data'
@@ -85,34 +123,6 @@ def main():
     print(f'Train data shape: {train_data.shape}')
     print(f'Test data shape: {test_data.shape}')
 
-    analytical_model = BatteryModel(batch_input_shape=train_data.shape, mlp=False, dt=10.0, share_q_r=True, batch_size=num_batteries)
-    analytical_model.summary()
-
-    analytical_predictions = analytical_model.predict(test_data)
-    analytical_predictions = np.nan_to_num(analytical_predictions)
-    
-    
-    # Calculate the MAE of the analytical model
-    analytical_predictions = analytical_predictions.reshape(test_targets.shape)
-    mae_analytical = np.mean(np.abs(test_targets - analytical_predictions))
-
-    print(f'MAE of the analytical model: {mae_analytical}')
-
-    analytical_model.compile(optimizer='adam', loss=masked_mae_loss)
-    analytical_model.fit(train_data, train_targets, epochs=20, callbacks=[tf.keras.callbacks.EarlyStopping(patience=5, monitor='loss')])
-
-    analytical_predictions_after_training = analytical_model.predict(test_data)
-    analytical_predictions_after_training = np.nan_to_num(analytical_predictions_after_training)
-
-    # Calculate the MAE of the analytical model after training
-    analytical_predictions_after_training = analytical_predictions_after_training.reshape(test_targets.shape)
-    mae_analytical_after_training = np.mean(np.abs(test_targets - analytical_predictions_after_training))
-    
-    print(f'MAE of the analytical model after training: {mae_analytical_after_training}')
-
-    plot_outputs(test_data, analytical_predictions, 'Images/analytical_outputs_after_trained.png')
-    
-    
     mlp_model = BatteryModel(batch_input_shape=train_data.shape, mlp=True, dt=10.0, share_q_r=True, batch_size=num_batteries)
     mlp_model.summary()
 
@@ -122,6 +132,8 @@ def main():
     mae_before_training = np.mean(np.abs(test_targets - mlp_predictions_before_training))
 
     print(f'MAE before training: {mae_before_training}')
+
+    test_approximation(mlp_model.model.layers[0].cell.MLPp)
 
     # Plot the outputs before training
     compare_outputs(test_targets, mlp_predictions_before_training, 'Images/outputs_before_training.png')
@@ -137,17 +149,9 @@ def main():
 
     print(f'MAE after training: {mae_after_training}')
 
+    test_approximation(mlp_model.model.layers[0].cell.MLPp)
+
     # Plot the outputs after training
     compare_outputs(test_targets, mlp_predictions_after_training, 'Images/outputs_after_training.png')
-
-    # Plot the outputs after training
-    plot_outputs(test_data, test_targets, 'Images/target_outputs.png')
-    plot_outputs(test_data, analytical_predictions, 'Images/analytical_outputs.png')
-    plot_outputs(test_data, mlp_predictions_before_training, 'Images/withMLP_outputs_before_training.png')
-    plot_outputs(test_data, mlp_predictions_after_training, 'Images/withMLP_outputs_after_training.png')
-    
-
-
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     main()

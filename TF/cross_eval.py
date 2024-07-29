@@ -9,7 +9,7 @@ from tqdm import tqdm
 import seaborn as sns
 from scipy.stats import norm
 
-from model import get_model
+from Model import get_model
 
 from battery_data import getDischargeMultipleBatteries
 

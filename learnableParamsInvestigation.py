@@ -1,4 +1,4 @@
-from model import BatteryModel, plot_outputs
+from Model import BatteryModel, plot_outputs
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt

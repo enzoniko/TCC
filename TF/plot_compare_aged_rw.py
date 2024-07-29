@@ -5,7 +5,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-from model import get_model
+from Model import get_model
 
 matplotlib.rc('font', size=14)
 

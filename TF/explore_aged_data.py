@@ -7,7 +7,7 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
 
-from model import get_model
+from Model import get_model
 
 from battery_data import getDischargeMultipleBatteries
 
