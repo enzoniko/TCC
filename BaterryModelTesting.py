@@ -19,10 +19,10 @@ def initialize_inputs(dtype, example='constant_noise', shape=(8, 3100, 1), max_c
         inputs = inputs.T[:,:,np.newaxis]
         return inputs
     elif example == 'real_data':
-        data_RW = getDischargeMultipleBatteries()
+        data_RW = getDischargeMultipleBatteries(discharge_type='discharge (random walk)')
 
         # Pad the data
-        padded_data, dt = process_battery_data(data_RW, max_steps=10, EOD=3.2)
+        padded_data, dt = process_battery_data(data_RW, max_steps=1000, EOD=3.2)
 
         print(f"DT: {dt}")
 
@@ -77,12 +77,17 @@ def main():
     num_steps = inputs.shape[0]/num_batteries
     # Separate into training and testing data by taking the first train_percentage*num_steps*num_batteries as training data and the rest as testing data
     train_percentage = 0.8
-    train_data = inputs[:int(train_percentage*num_steps*num_batteries)]
+    """ train_data = inputs[:int(train_percentage*num_steps*num_batteries)]
     test_data = inputs[int(train_percentage*num_steps*num_batteries):]
     train_targets = targets[:int(train_percentage*num_steps*num_batteries)]
-    test_targets = targets[int(train_percentage*num_steps*num_batteries):] 
+    test_targets = targets[int(train_percentage*num_steps*num_batteries):]  """
 
-    print(f'Train data shape: {train_data.shape}')
+    train_data = inputs
+    test_data = inputs
+    train_targets = targets
+    test_targets = targets
+    
+    """ print(f'Train data shape: {train_data.shape}')
     print(f'Test data shape: {test_data.shape}')
 
     analytical_model = BatteryModel(batch_input_shape=train_data.shape, mlp=False, dt=10.0, share_q_r=True, batch_size=num_batteries)
@@ -110,10 +115,10 @@ def main():
     
     print(f'MAE of the analytical model after training: {mae_analytical_after_training}')
 
-    plot_outputs(test_data, analytical_predictions, 'Images/analytical_outputs_after_trained.png')
+    plot_outputs(test_data, analytical_predictions, 'Images/analytical_outputs_after_trained.png') """
     
     
-    mlp_model = BatteryModel(batch_input_shape=train_data.shape, mlp=True, dt=10.0, share_q_r=True, batch_size=num_batteries)
+    mlp_model = BatteryModel(batch_input_shape=train_data.shape, mlp=True, dt=10.0, share_q_r=False, batch_size=num_batteries)
     mlp_model.summary()
 
     mlp_predictions_before_training = mlp_model.predict(test_data)

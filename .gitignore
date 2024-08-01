@@ -4,3 +4,4 @@ Data/
 *.npy
 __pycache__/
 *.h5
+training/

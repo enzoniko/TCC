@@ -32,7 +32,7 @@ class AnalyticalBatteryRNNCell(Layer):
     def initBatteryParams(self):
         """ Initialize the battery parameters """
         P = self
-        defaultParams = default_parameters(learnable=True)
+        defaultParams = default_parameters(learnable=False)
         P.xnMax = defaultParams['xnMax']         # Mole fractions on negative electrode (max)
         P.xnMin = defaultParams['xnMin']          # Mole fractions on negative electrode (min)
         P.xpMax = defaultParams['xpMax']          # Mole fractions on positive electrode (max)
@@ -101,7 +101,7 @@ class AnalyticalBatteryRNNCell(Layer):
         P.tsp = defaultParams['tsp']     # for surface overpotential (pos)
 
         # Redlich-Kister default parameters
-        rkexp = rkexp_default_parameters(learnable=True)
+        rkexp = rkexp_default_parameters(learnable=False)
 
         # RK parameters (positive electrode)
         P.U0p = rkexp['positive']['U0']
@@ -119,24 +119,25 @@ class AnalyticalBatteryRNNCell(Layer):
         P.BASE_Ap11 = rkexp['positive']['A11']
         P.BASE_Ap12 = rkexp['positive']['A12']
 
-        P.Ap0 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap1 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap2 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap3 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap4 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap5 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap6 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap7 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap8 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap9 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap10 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap11 = tf.Variable(1.0, dtype=self.dtype)
-        P.Ap12 = tf.Variable(1.0, dtype=self.dtype)
+        A_learnable = False # CHANGED TO FALSE TO MAXIMIZE CHANGE IN R0
+        P.Ap0 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap1 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap2 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap3 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap4 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap5 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap6 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap7 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap8 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap9 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap10 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap11 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
+        P.Ap12 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
 
         # Redlich-Kister parameters (negative electrode)
         P.U0n = rkexp['negative']['U0']
         P.BASE_An0 = rkexp['negative']['As'][0]
-        P.An0 = tf.Variable(1.0, dtype=self.dtype)
+        P.An0 = tf.Variable(1.0, dtype=self.dtype, learnable=A_learnable)
         P.An1 = tf.constant(0, dtype=self.dtype)
         P.An2 = tf.constant(0, dtype=self.dtype)
         P.An3 = tf.constant(0, dtype=self.dtype)
@@ -151,7 +152,7 @@ class AnalyticalBatteryRNNCell(Layer):
         P.An12 = tf.constant(0, dtype=self.dtype)
 
         # End of discharge voltage threshold
-        P.VEOD = tf.constant(3.0, dtype=self.dtype)
+        P.VEOD = tf.constant(3.2, dtype=self.dtype)
 
         self.updateBatteryParams()
     @tf.function

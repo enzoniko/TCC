@@ -59,7 +59,7 @@ class WithMLPBatteryRNNCell(Layer):
         self.MLPn.fit(X,Y, epochs=200, verbose=0)
 
         for layer in self.MLPp.layers:
-            layer.trainable=mlp_trainable
+            layer.trainable=False # CHANGED TO FALSE TO TEST ONLY LEARNING R0 AND qMAX
 
         for layer in self.MLPn.layers:
             # layer.trainable=mlp_trainable

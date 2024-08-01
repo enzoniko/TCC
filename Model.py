@@ -48,6 +48,12 @@ class BatteryModel:
         kwargs['batch_size'] = self.batch_size
         return self.model.evaluate(*args, **kwargs)   
 
+    def load_weights(self, *args, **kwargs):
+        return self.model.load_weights(*args, **kwargs)
+    
+    def get_weights(self):
+        return self.model.get_weights()
+    
     def summary(self):
         return self.model.summary() 
     

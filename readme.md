@@ -11,3 +11,4 @@
 - vint_explo.py is a script that creates a 3D plot comparing the effects of varying one coefficient of the RK exp on the resulting Vint.
 - SaveInputDataRefDisc.py is a script that saves the input data for the reference discharge to use in the aging models data generation.
 - SaveInputDataPower-HourDisc.py is a script that saves the input data for the power-hour discharge to use in the aging models data generation.
+- SaveAgingParameters.py is a script that saves the aging parameters to use in the aging models data generation.
